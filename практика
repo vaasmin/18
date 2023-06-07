@@ -1,0 +1,56 @@
+class APIException(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
+    import requests
+    import json
+
+    class ExchangeRate:
+        @staticmethod
+        def get_price(base: str, quote: str, amount: float) -> float:
+            try:
+                url = f'https://api.exchangeratesapi.io/latest?base={base}&symbols={quote}'
+                response = requests.get(url)
+                exchange_rate_data = json.loads(response.text)
+
+                if exchange_rate_data.get('error'):
+                    raise APIException('API ошибка. Не удалось получить курс валют.')
+
+                exchange_rate = exchange_rate_data['rates'][quote] * amount
+                return exchange_rate
+
+            except KeyError:
+                raise APIException('Некорректный ввод. Указанных валют не существует.')
+            except ValueError:
+                raise APIException('Некорректный ввод. Проверьте правильность введенного числа.')
+
+            import telebot
+            from extensions import APIException, ExchangeRate
+
+            bot = telebot.TeleBot('YOUR_BOT_TOKEN')
+
+            @bot.message_handler(commands=['start', 'help'])
+            def send_welcome(message):
+                bot.reply_to(message,
+                             'Этот бот вернет вам цену на определенное количество валюты (евро, доллар или рубль). Чтобы получить цену, введите команду в формате:\n<имя валюты цену которой он хочет узнать> <имя валюты в которой надо узнать цену первой валюты> <количество первой валюты>')
+
+            @bot.message_handler(commands=['values'])
+            def show_values(message):
+                bot.reply_to(message, 'Доступные валюты: EUR, USD, RUB')
+
+            @bot.message_handler(content_types=['text'])
+            def get_exchange_rate(message):
+                try:
+                    base, quote, amount = message.text.split()
+                    exchange_rate = ExchangeRate.get_price(base.upper(), quote.upper(), float(amount))
+                    bot.reply_to(message, f'{amount} {base.upper()} = {exchange_rate} {quote.upper()}')
+
+                except ValueError:
+                    bot.reply_to(message, 'Некорректный ввод. Проверьте правильность введенной команды.')
+                except APIException as e:
+                    bot.reply_to(message, f'Ошибка: {e}')
+
+            bot.polling(none_stop=True)
